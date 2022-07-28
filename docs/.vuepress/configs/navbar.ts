@@ -6,7 +6,10 @@ export const navbar: NavbarConfig = [
     children: [
       '/frontend-base/html.md',
       '/frontend-base/css.md',
-      '/frontend-base/javascript/'
+      {
+        text: 'Javascript',
+        link: '/frontend-base/javascript/'
+      }
     ]
   },
   {
@@ -37,7 +40,8 @@ export const navbar: NavbarConfig = [
     text: 'HTTP',
     children: [
       '/http/headers.md',
-      '/http/cache.md'
+      '/http/cache.md',
+      '/http/cors.md'
     ]
   }
 ]

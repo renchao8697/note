@@ -20,7 +20,19 @@
 
 并非所有出现在请求中的HTTP头都属于请求头，例如在POST请求中经常出现的`Content-Length`实际上是一个代表请求主体大小的[entity header](#entiry-headers)，虽然你也可以把它叫做请求头。
 
-此外，`CORS`定义了一个叫做`simple headers`的集合，它是请求头集合的一个子集。如果某次请求是只包含`simple header`的话，则被认为是简单请求不会触发请求预检（`prefight`）。
+此外，[CORS](./cors.md)定义了一个叫做[simple headers](./cors.md#简单头部)的集合，它是请求头集合的一个子集。如果某次请求是只包含`simple header`的话，则被认为是简单请求不会触发请求预检（[prefight](./cors.md#prefight)）。
+
+## Response Headers
+
+**响应头**可以定义为：被用于HTTP响应中并且和响应消息主体无关的一类HTTP Header。想`Age`，`Location`和`Server`都属于响应头，他们被用于描述响应。
+
+并非所有出现在响应中的HTTP Header都属于响应头，例如`Content-Length`就是一个代表响应体消息大小的[entity header](#entiry-headers)，虽然你也可以把它叫做响应头。
+
+## Entiry Headers
+
+**实体报头**是描述了一个HTTP消息有效载荷（即关于消息主体的元数据）的HTTP报头。包括Content-Length、Content-Language、Content-Encoding、Content-Type和Expires等。实体报头可能同时存在于HTTP请求和响应信息中。
+
+## HTTP主要头部
 
 ### Cache-Control
 
@@ -130,18 +142,6 @@ Cache-control: stale-if-error=<seconds>
 ##### only-if-cached
 
 表明客户端只接受已缓存的响应，并且不要想原始服务器检查是否有更新的拷贝。
-
-
-
-## Response Headers
-
-**响应头**可以定义为：被用于HTTP响应中并且和响应消息主体无关的一类HTTP Header。想`Age`，`Location`和`Server`都属于响应头，他们被用于描述响应。
-
-并非所有出现在响应中的HTTP Header都属于响应头，例如`Content-Length`就是一个代表响应体消息大小的[entity header](#entiry-headers)，虽然你也可以把它叫做响应头。
-
-## Entiry Headers
-
-**实体报头**是描述了一个HTTP消息有效载荷（即关于消息主体的元数据）的HTTP报头。包括Content-Length、Content-Language、Content-Encoding、Content-Type和Expires等。实体报头可能同时存在于HTTP请求和响应信息中。
 
 
 

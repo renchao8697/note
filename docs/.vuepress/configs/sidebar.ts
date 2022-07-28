@@ -25,6 +25,7 @@ export const sidebar: SidebarConfig = {
   ],
   '/http/': [
     '/http/headers.md',
-    '/http/cache.md'
+    '/http/cache.md',
+    '/http/cors.md'
   ]
 }
