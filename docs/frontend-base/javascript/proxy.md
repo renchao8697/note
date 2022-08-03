@@ -140,4 +140,13 @@ console.log(Object.preventExtensions(p))
 
 `Object.preventExtensions()`仅阻止添加自身的属性。但其对象类型的原型依然可以添加新的属性。
 
+`Object.preventExtensions()`方法使目标对象的`[[Prototype]]`不可变。
 
+
+```js
+const fixed = Object.preventExtensions({});
+fixed.__proto__ = { oh: 'hai' };  // throws a 'TypeError'.
+fixed.__proto__.a = 123
+console.log(fixed.a)
+// output: sss
+```
