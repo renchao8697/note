@@ -149,185 +149,282 @@ const proxy = new Proxy(target, Reflect)
 
 ### 捕获器不变式
 
-
-
-
-
-
-
-
-
-
-* `target`：要使用`Proxy`包装的目标对象（可以是任何类型的对象，包括原生数组，函数，甚至另一个代理）。
-* `handler`：一个通常以函数作为属性的对象，各属性中的函数分别定义了在执行各种操作时代理`p`的行为。
-
-## handler对象的方法
-
-`handler`对象是一个容纳一批特定属性的占位符对象。它包含有`Proxy`的各个捕捉器（trap）。
-
-所有的捕捉器是可选的。如果没有定义某个捕捉器，那么就会保留源对象的默认行为。
-
-### getPrototypeOf
-
-`handler.getPrototypeOf()`：`Object.getPrototypeOf()`方法的捕捉器
-```js
-const target = {
-  n: 1
-}
-const targetPrototype = {
-  n: 2
-}
-const handler = {
-  getPrototypeOf(target) {
-    return targetPrototype;
-  }
-}
-const p = new Proxy(target, handler)
-console.log(Object.getPrototypeOf(p) === targetPrototype)
-// output: true
-console.log(Object.getPrototypeOf(p).n)
-// output: 2
-```
-
-`Object.getPrototypeOf()`方法返回指定对象的原型（内部`[[Prototype]]`属性的值）。
-
-```js
-const proto = {}
-const obj = Object.create(proto)
-console.log(Object.getPrototypeOf(obj) === proto)
-// output: true
-const reg = /a/
-console.log(Object.getPrototypeOf(reg) === RegExp.prototype)
-// output: true
-```
-
-
-在ES5中如果参数不是一个对象类型，将会抛出一个`TypeError`异常。在ES6中，参数会被强制转换为一个Object。
-
-```js
-Object.getPrototypeOf('foo');
-// TypeError: "foo" is not an object (ES5 code)
-Object.getPrototypeOf('foo');
-// String.prototype (ES2015 code)
-```
-
-### setPrototypeOf
-
-`handler.setPrototypeOf()`：`Object.setPrototypeOf()`方法的捕捉器
+使用捕获器几乎可以改变所有基本方法的行为，但也不是没有限制。根据ECMEAScript规范，每个捕获的方法都知道目标对象上下文、捕获函数签名，而捕获处理程序的行为必须遵守“捕获器不变式”（trap invariant）。捕获器不变式因方法不同而异，但通常都会防止捕获器定义出现过于翻唱的行为。
+比如，如果目标对象对有一个不可配置且不可写的数据属性，那么在捕获器返回一个鱼该属性不同的值时，会抛出TypeError：
 
 ```js
 const target = {}
-const newProto = {}
+Object.defineProperty(target, 'foo', {
+  configurable: false,
+  writable: false,
+  value: 'bar'
+})
 const handler = {
-  setPrototypeOf(target, prototype) {
-    Object.setPrototypeOf(target, prototype)
-    // 如果返回false或throw Error则set失败
-    return true
+  get() {
+    return 'qux'
   }
 }
-const p = new Proxy(target, handler)
-Object.setPrototypeOf(p, newProto)
-console.log(Object.getPrototypeOf(p) === newProto)
-// output: true
+const proxy = new Proxy(target, handler)
+console.log(proxy.foo)
+// TypeError
 ```
 
-`Object.setPrototypeOf()`方法设置一个指定的对象的原型（即，内部`[[Prototype]]`属性）到另一个对象或`null`。
+### 可撤销代理
 
-::: danger 警告
-由于现代JavaScript引擎优化属性访问所带来的特性的关系，更改对象的`[[Prototype]]`在 ***各个*** 浏览器和JavaScript引擎上都是一个很慢的操作。其在更改继承的性能上的影响是微妙而又广泛的，这仅仅限于`obj.__proto__ = ...`语句上的时间花费，而且可能会延伸到 ***任何*** 代码，哪些可以访问 ***任何*** `[[Prototype]]`已被更改的对象的代码。如果你关心性能，你应该避免设置一个对象的`[[Prototype]]`。相反。你应该使用`Object.create()`来创建带有你想要`[[Prototype]]`的新对象。
-:::
+有时候可能需要中断代理对象与目标对象之前的联系。对于使用`new Proxy()`创建的普通代理来说，这种联系会在代理对象的生命周期内一直持续存在。
+
+`Proxy`也暴露了`revocable()`方法，这个方法支持撤销代理对象与目标对象的关联。撤销代理的操作时不可逆的。而且撤销函数（revoke()）是幂等的，调用多少次的结果都一样。撤销代理之后在调用代理会抛出TypeError。
+
+撤销函数和代理对象是在实例化时同时生成的：
 
 ```js
-Object.setPrototypeOf(obj, prototype)
+const target = {
+  foo: 'bar'
+}
+const handler = {
+  get() {
+    return 'intercepted'
+  }
+}
+const { proxy, revoke } = Proxy.revocable(target, handler)
+console.log(proxy.foo); // intercepted
+console.log(target.foo);  // bar
+
+revoke();
+console.log(proxy.foo); // TypeError
 ```
 
-如果对象的`[[Prototype]]`被修改成不可扩展（通过`Object.isExtensible()`查看），就会判处`TypeError`异常。如果prototype参数不是一个对象或者null（例如，数字，字符串，boolean或者undefined），则什么都不坐。否则，该方法将obj的`[[Prototype]]`修改为新的值。
+### 实用反射API
 
-### isExtensible
+某些情况下应该优先使用反射API，这是有一些理由的。
 
-`handler.isExtensible()`：`Object.isExtensible()`方法的捕捉器
+1. 反射API与对象API
+
+在使用反射API时，要记住：
+  - 反射API并不限于捕获处理程序；
+  - 大多数反射API方法与Object类型上有对应的方法。
+
+**通常，Object上的方法适用于通用程序，而反射方法适用于细粒度的对象控制与操作。**
+
+2. 状态标记
+
+很多反射方法返回称作“状态标记”的布尔值，表示意图执行的操作是否成功。有时候，状态标记比哪些返回修改后的对象或者抛出错误（取决于方法）的反射API方法更有用。例如，可以使用反射API对下面的代码进行重构：
 
 ```js
-const p = new Proxy({}, {
-  isExtensible(target) {
-    console.log('called')
-    // 返回false会报错
-    // 可以不返回boolean值，如0和1
-    return true
+const o = {}
+try {
+  Object.defineProperty(o, 'foo', 'bar');
+  console.log('success');
+} catch(e) {
+  console.log('failure')
+}
+```
+
+在定义新属性时如果发生问题，`Reflect.defineProperty()`会返回`false`，而不是抛出错误。因此使用这个反射方法可以重新重构上面的代码：
+
+```js
+const o = {}
+if (Reflect.defineProperty(o, 'foo', {value: 'bar'})) {
+  console.log('success')
+} else {
+  console.log('failure')
+}
+```
+
+以下反射方法都会提供状态标记：
+
+* `Reflect.defineProperty()`
+* `Reflect.preventExtensions()`
+* `Reflect.setPrototypeOf()`
+* `Reflect.set()`
+* `Reflect.deleteProperty()`
+
+3. 用一等函数代替操作符
+
+以下反射方法提供只有通过操作符才能完成的操作。
+
+* `Reflect.get()`：可以代替对象属性访问操作符。
+* `Reflect.set()`：可以代替`=`赋值操作符
+* `Reflect.has()`：可以代替`in`操作符或`with()`
+* `Reflect.deleteProperty()`：可以代替`delete`操作符。
+* `Reflect.construct()`：可以代替`new`操作符。
+
+4. 安全地应用函数
+
+在通过`apply`方法调用函数时，被调用的函数可能也定义了自己的`apply`属性（虽然可能性极小）。为了绕过这个问题，可以使用定义在`Function`原型上的`apply`方法，比如：`Function.prototype.apply.call(myFunc, thisVal, argumentList)`;这种可怕的代码完全可以使用`Reflect.apply`来避免：`Reflect.apply(myFunc, thisVal, argumentList)`;
+
+### 代理另一个代理
+
+代理可以拦截反射API的操作，而这意味完全可以创建一个代理，通过它取代理另一个代理。这样就可以在一个目标对象之上构建多层拦截网：
+
+```js
+const target = {
+  foo: 'bar'
+}
+const firstProxy = new Proxy(target, {
+  get() {
+    console.log('first proxy');
+    return Reflect.get(...arguments)
   }
 })
-console.log(Object.isExtensible(p))
-// output: true
-```
-
-`Object.isExtensible()`方法判断一个对象是否可扩展。默认情况下，对象是可以扩展的，我们可以使用`Object.preventExtensions`、`Object.seal`或`Object.freeze`方法设置一个对象为不可扩展（non-extensible）。
-
-在ES5中，如果参数不是一个对象类型，将会抛出一个`TypeError`异常。在ES6中，non-object 参数将被视为一个不可扩展的普通对象，将会返回false。
-
-```js
-Object.isExtensible(1);
-// TypeError: 1 is not an object (ES5 code)
-Object.isExtensible(1);
-// false                         (ES6 code)
-```
-
-### preventExtensible
-
-`handler.preventExtensible()`：`Object.preventExtensible()`方法的捕捉器
-
-```js
-const p = new Proxy({}, {
-  preventExtensions(target) {
-    return Object.preventExtensions(target);
+const secondProxy = new Proxy(firstProxy, {
+  get() {
+    console.log('second proxy');
+    return Reflect.get(...arguments)
   }
 })
 
-console.log(Object.preventExtensions(p))
-// output: Proxy对象，但是MDN中表示会返回boolean
+console.log(secondProxy.foo)
+// second proxy
+// first proxy
+// bar
 ```
 
-`Object.preventExtensions()`方法让一个对象变的不可扩展，也就是永远不能再添加新的属性。
+### 代理的问题与不足
 
-`Object.preventExtensions()`会返回已经不可扩展的对象。
+代理是在ECMAScript现有基础之上构建起来的一套新API，因此其实实现已经尽力做到最好了。很大程度上，代理作为对象的虚拟层可以正常使用。但在默写情况下，代理也不能与现在的ECMAScript机制很好地协同。
 
-`Object.preventExtensions()`仅阻止添加自身的属性。但其对象类型的原型依然可以添加新的属性。
+1. 代理中的`this`
 
-`Object.preventExtensions()`方法使目标对象的`[[Prototype]]`不可变。
-
+代理潜在的一个问题来源是`this`值。我们知道，方法中的this通常指向调用这个方法的对象：
 
 ```js
-const fixed = Object.preventExtensions({});
-fixed.__proto__ = { oh: 'hai' };  // throws a 'TypeError'.
-fixed.__proto__.a = 123
-console.log(fixed.a)
-// output: 123
+const target = {
+  theisValEqualsProxy() {
+    return this === proxy;
+  }
+}
+const proxy = new Proxy(target, {});
+
+console.log(target.thisValEqualsProxy()); // false
+console.log(proxy.thisValEqualsProxy()); // true
 ```
 
-### getOwnPropertyDescriptor
+从直觉上讲，这样完全没有问题：调用代理上的任何方法，比如`proxy.outermethod()`，而这个方法进而又会调用另一个方法，如`this.innerMethod()`，实际上都会调用`proxy.innerMethod()`。多数情况下，这是符合预期的行为。可是，如果目标对象依赖于对象标识，那就可能碰到意料之外的问题。
 
-`handler.getOwnPropertyDescriptor()`：`Object.getOwnPropertyDescriptor()`方法的捕捉器
+```js
+const wm = new WeakMap();
+class User {
+  constructor(userId) {
+    wm.set(this, userId)
+  }
+  set id(userId) {
+    wm.set(this.userId);
+  }
+  get id() {
+    return wm.get(this)
+  }
+}
+```
+
+由于这个实现依赖`User`实例的对象标识，在这个实例被代理的情况下就会出现问题：
+
+```js
+const user = new User(123);
+console.log(user.id); // 123
+
+const userInstanceProxy = new Proxy(user, {});
+console.log(userInstanceProxy.id);  // undefined
+```
+
+这是因为`User`实例一开始使用目标对象作为`WeakMap`的键，代理对象却尝试从自身取得这个实例。要解决这个问题，就需要重新配置代理，把代理`User`实例改为代理`User`类本身。之后在创建代理的实例就会以代理实例作为`WeakMap`的键了：
+
+```js
+const UserClassProxy = new Proxy(User, {});
+const proxyUser = new UserClassProxy(456);
+console.log(proxyUser.id);  // 456
+```
+
+2. 代理与内部槽位
+
+代理与内置引用类型（比如`Array`）的实例通常可以很好地协同，但有些ECMAScript内置类型可能会依赖代理无法控制的机制，结果导致在代理上调用某些方法会出错。
+
+一个典型的例子就是`Date`类型。根据ECMAScript规范，`Date`类型方法的执行依赖`this`值上的内部槽位`[[NumberDate]]`。代理对象上不存在这个内部槽位，而且这个内部槽位的值也不能通过普通的`get()`和`set()`操作访问到，于是代理拦截后本应转发给不表对象的方法会抛出`TypeError`：
+
+```js
+const target = new Date();
+const proxy = new Proxy(target, {});
+
+console.log(proxy instanceof Date); // true
+proxy.getDate();  // TypeError: 'this' is not a Date object
+```
+
+## 代理捕获器与反射方法
+
+代理可以捕获13种不同的基本操作。这些操作有各自不同的反射API方法、参数、关联ECMAScript操作和不变式。
+
+对于在代理对象上执行的任何一种操作，只会有一个捕获处理程序被调用。不会存在重复捕获的情况。
+
+只要在代理上调用，所有捕获器都会拦截它们对应的反射API操作。
+
+### get()
+
+`get()`捕获器会在获取属性值的操作中被调用。对应的反射API方法为`Reflect.get()`。
+
+```js
+const myTarget = {};
+const proxy = new Proxy(myTarget, {
+  get(target, property, receiver) {
+    console.log('get()');
+    return Reflect.get(...arguments);
+  }
+})
+proxy.foo;  // get()
+```
+
+1. 返回值
+
+返回值无限制。
+
+2. 拦截的操作
+
+* proxy.property
+* proxy[property]
+* Object.create(proxy)[property]
+* Reflect.get(proxy, property, receiver)
+
+3. 捕获器处理程序参数
+
+* target：目标对象。
+* property：引用的目标对象上的字符串属性。
+* receiver：代理对象或继承代理对象的对象。
+
+4. 捕获器不变式
+
+* 如果`target.property`不可写且不可配置，则处理程序返回的值必须与`target.property`匹配。
+* 如果`target.property`不可配置且`[[Get]]`特性为`undefined`，处理程序的返回值也必须是`undefined`。
+
+### set()
 
 
-### defineProperty
+### has()
 
 
-
-### has
-
-
-### get
+### defineProperty()
 
 
-### set
+### getOwnPropertyDescriptor()
 
 
-### deleteProperty
+### deleteProperty()
 
 
-### ownKeys
+### ownKeys()
 
 
-### apply
+### getPrototypeOf()
 
 
-### construct
+### setPrototypeOf()
+
+
+### isExtensible()
+
+
+### preventExtensions()
+
+
+### apply()
+
+
+### construct()
