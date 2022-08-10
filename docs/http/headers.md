@@ -142,24 +142,3 @@ Cache-control: stale-if-error=<seconds>
 ##### only-if-cached
 
 表明客户端只接受已缓存的响应，并且不要想原始服务器检查是否有更新的拷贝。
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## 待添加内容
- - [ ] simple headers
- - [ ] CORS
- - [ ] preflight
