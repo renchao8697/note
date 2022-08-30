@@ -8,6 +8,7 @@ export const sidebar: SidebarConfig = {
       text: 'Javascript',
       children: [
         '/frontend-base/javascript/index.md',
+        '/frontend-base/javascript/data-structure.md',
         '/frontend-base/javascript/proxy.md',
       ]
     }
