@@ -43,5 +43,13 @@ export const navbar: NavbarConfig = [
       '/http/cache.md',
       '/http/cors.md'
     ]
+  },
+  {
+    text: '数据库',
+    children: [
+      '/database/sql.md',
+      '/database/mongodb.md',
+      '/database/redis.md'
+    ]
   }
 ]

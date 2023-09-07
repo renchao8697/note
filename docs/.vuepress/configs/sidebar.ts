@@ -28,5 +28,10 @@ export const sidebar: SidebarConfig = {
     '/http/headers.md',
     '/http/cache.md',
     '/http/cors.md'
+  ],
+  '/database/': [
+    '/database/sql.md',
+    '/database/mongodb.md',
+    '/database/redis.md',
   ]
 }
